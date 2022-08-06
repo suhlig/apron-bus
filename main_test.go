@@ -99,7 +99,9 @@ var _ = Describe("main", func() {
 		})
 	})
 
-	XContext("no fly matching the server version available", func() {})
+	XContext("no fly matching the server version available", func() {
+		XIt("prints instructions to fetch the right binary", func() {})
+	})
 
 	Context("47.1.1", func() {
 		BeforeEach(func() {
