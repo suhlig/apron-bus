@@ -22,7 +22,9 @@ func main() {
 	if len(os.Args) == 1 {
 		fmt.Println("No args given.")
 		fmt.Println("")
-		fmt.Println("Usage: apron-bus selects the flyX.Y.Z binary that matches the target server's version; passing all arguments to it.")
+		fmt.Println("apron-bus selects the flyX.Y.Z binary that matches the target server's version; passing all arguments to it.")
+		fmt.Println("")
+		fmt.Println("Use it with the same args as fly.")
 		os.Exit(0)
 	}
 

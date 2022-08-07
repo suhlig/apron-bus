@@ -29,59 +29,21 @@ var _ = AfterSuite(func() {
 
 var _ = Describe("main", func() {
 	var (
-		err           error
-		session       *gexec.Session
-		args          []string
-		homeDirectory string
-		server        *ghttp.Server
-		pathToFakeFly string
-		serverVersion string
+		err     error
+		session *gexec.Session
+		command *exec.Cmd
+		args    []string
 	)
 
 	BeforeEach(func() {
-		homeDirectory = GinkgoT().TempDir()
-		server = ghttp.NewServer()
-
-		targets := rc.RC{
-			Targets: rc.Targets{
-				rc.TargetName("mock"): rc.TargetProps{
-					API: server.URL(),
-				},
-			},
-		}
-
-		d, err := yaml.Marshal(&targets)
-		Expect(err).ToNot(HaveOccurred())
-
-		err = ioutil.WriteFile(filepath.Join(homeDirectory, ".flyrc"), d, 0644)
-		Expect(err).ToNot(HaveOccurred())
-	})
-
-	AfterEach(func() {
-		server.Close()
+		command = exec.Command(pathToApronBus, args...)
 	})
 
 	JustBeforeEach(func() {
-		server.AppendHandlers(
-			ghttp.CombineHandlers(
-				ghttp.VerifyRequest("GET", "/api/v1/info"),
-				ghttp.RespondWith(http.StatusOK, fmt.Sprintf(`{"version":"%v"}`, serverVersion)),
-			))
-
-		pathToFakeFly, err = gexec.Build(fmt.Sprintf("github.com/suhlig/apron-bus/fakes/fly%v", serverVersion))
-		Expect(err).ToNot(HaveOccurred())
-
-		command := exec.Command(pathToApronBus, args...)
-		command.Env = []string{
-			fmt.Sprintf("PATH=%v", filepath.Dir(pathToFakeFly)),
-			fmt.Sprintf("HOME=%v", homeDirectory),
-		}
-
 		session, err = gexec.Start(command, GinkgoWriter, GinkgoWriter)
 	})
 
-	// TODO Move setup of fake fly into a separate context so that we can test here without any fly
-	XContext("no fly available", func() {
+	Context("no fly available", func() {
 		Context("no args", func() {
 			BeforeEach(func() {
 				args = []string{}
@@ -95,7 +57,9 @@ var _ = Describe("main", func() {
 				Eventually(session).Should(gexec.Exit(0))
 			})
 
-			XIt("prints usage", func() {})
+			It("prints usage", func() {
+				Expect(session.Wait().Out.Contents()).To(ContainSubstring("fly"))
+			})
 		})
 	})
 
@@ -104,9 +68,34 @@ var _ = Describe("main", func() {
 	})
 
 	Context("47.1.1", func() {
+		const serverVersion = "47.1.1"
+
+		var (
+			homeDirectory string
+			server        *ghttp.Server
+			pathToFakeFly string
+		)
+
 		BeforeEach(func() {
-			serverVersion = "47.1.1"
+			server = newMockServer(serverVersion)
+
+			homeDirectory = GinkgoT().TempDir()
+			err = writeFlyRC(homeDirectory, server.URL())
+			Expect(err).ToNot(HaveOccurred())
+
+			pathToFakeFly, err = gexec.Build(fmt.Sprintf("github.com/suhlig/apron-bus/fakes/fly%v", serverVersion))
+			Expect(err).ToNot(HaveOccurred())
+
+			command.Env = []string{
+				fmt.Sprintf("PATH=%v", filepath.Dir(pathToFakeFly)),
+				fmt.Sprintf("HOME=%v", homeDirectory),
+			}
+
 			args = []string{"--target", "mock", "--verbose", "status"}
+		})
+
+		AfterEach(func() {
+			server.Close()
 		})
 
 		It("succeeds", func() {
@@ -118,3 +107,32 @@ var _ = Describe("main", func() {
 		})
 	})
 })
+
+func writeFlyRC(homeDirectory, serverURL string) error {
+	targets := rc.RC{
+		Targets: rc.Targets{
+			rc.TargetName("mock"): rc.TargetProps{
+				API: serverURL,
+			},
+		},
+	}
+
+	data, err := yaml.Marshal(&targets)
+
+	if err != nil {
+		return err
+	}
+
+	return ioutil.WriteFile(filepath.Join(homeDirectory, ".flyrc"), data, 0644)
+}
+
+func newMockServer(version string) *ghttp.Server {
+	server := ghttp.NewServer()
+
+	server.AppendHandlers(
+		ghttp.CombineHandlers(
+			ghttp.VerifyRequest("GET", "/api/v1/info"),
+			ghttp.RespondWith(http.StatusOK, fmt.Sprintf(`{"version":"%v"}`, version)),
+		))
+	return server
+}
