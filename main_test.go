@@ -32,12 +32,7 @@ var _ = Describe("main", func() {
 		err     error
 		session *gexec.Session
 		command *exec.Cmd
-		args    []string
 	)
-
-	BeforeEach(func() {
-		command = exec.Command(pathToApronBus, args...)
-	})
 
 	JustBeforeEach(func() {
 		session, err = gexec.Start(command, GinkgoWriter, GinkgoWriter)
@@ -46,7 +41,7 @@ var _ = Describe("main", func() {
 	Context("no fly available", func() {
 		Context("no args", func() {
 			BeforeEach(func() {
-				args = []string{}
+				command = exec.Command(pathToApronBus, []string{}...)
 			})
 
 			It("succeeds", func() {
@@ -57,53 +52,78 @@ var _ = Describe("main", func() {
 				Eventually(session).Should(gexec.Exit(0))
 			})
 
-			It("prints usage", func() {
+			It("prints usage to STDOUT", func() {
 				Expect(session.Wait().Out.Contents()).To(ContainSubstring("fly"))
 			})
 		})
 	})
 
-	XContext("no fly matching the server version available", func() {
-		XIt("prints instructions to fetch the right binary", func() {})
-	})
-
-	Context("47.1.1", func() {
-		const serverVersion = "47.1.1"
-
+	Describe("calling of fly", func() {
 		var (
 			homeDirectory string
 			server        *ghttp.Server
 			pathToFakeFly string
+			serverVersion string
+			flyVersion    string
+			args          []string
 		)
 
 		BeforeEach(func() {
+			serverVersion = "47.1.1"
 			server = newMockServer(serverVersion)
 
 			homeDirectory = GinkgoT().TempDir()
 			err = writeFlyRC(homeDirectory, server.URL())
 			Expect(err).ToNot(HaveOccurred())
 
-			pathToFakeFly, err = gexec.Build(fmt.Sprintf("github.com/suhlig/apron-bus/fakes/fly%v", serverVersion))
-			Expect(err).ToNot(HaveOccurred())
-
-			command.Env = []string{
-				fmt.Sprintf("PATH=%v", filepath.Dir(pathToFakeFly)),
-				fmt.Sprintf("HOME=%v", homeDirectory),
-			}
-
 			args = []string{"--target", "mock", "--verbose", "status"}
 		})
 
-		AfterEach(func() {
-			server.Close()
+		Context("NO fly matching the server's version is avilable", func() {
+			BeforeEach(func() {
+				command = exec.Command(pathToApronBus, args...)
+				command.Env = []string{
+					fmt.Sprintf("HOME=%v", homeDirectory),
+				}
+			})
+
+			It("starts", func() {
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("exits with non-zero code", func() {
+				Eventually(session).ShouldNot(gexec.Exit(0))
+			})
+
+			It("prints the error on STDERR", func() {
+				Expect(string(session.Wait().Err.Contents())).To(ContainSubstring("could not find fly47.1.1"))
+			})
 		})
 
-		It("succeeds", func() {
-			Expect(err).ToNot(HaveOccurred())
-		})
+		Context("fly matching the server's version IS avilable", func() {
+			BeforeEach(func() {
+				flyVersion = serverVersion
+				pathToFakeFly, err = gexec.Build(fmt.Sprintf("github.com/suhlig/apron-bus/fakes/fly%v", flyVersion))
+				Expect(err).ToNot(HaveOccurred())
 
-		It("exits with code zero", func() {
-			Eventually(session).Should(gexec.Exit(0))
+				command = exec.Command(pathToApronBus, args...)
+				command.Env = []string{
+					fmt.Sprintf("PATH=%v", filepath.Dir(pathToFakeFly)),
+					fmt.Sprintf("HOME=%v", homeDirectory),
+				}
+			})
+
+			AfterEach(func() {
+				server.Close()
+			})
+
+			It("starts", func() {
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("exits with code zero", func() {
+				Eventually(session).Should(gexec.Exit(0))
+			})
 		})
 	})
 })
@@ -134,5 +154,6 @@ func newMockServer(version string) *ghttp.Server {
 			ghttp.VerifyRequest("GET", "/api/v1/info"),
 			ghttp.RespondWith(http.StatusOK, fmt.Sprintf(`{"version":"%v"}`, version)),
 		))
+
 	return server
 }

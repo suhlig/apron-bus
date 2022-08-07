@@ -1,6 +1,8 @@
 package atc_test
 
 import (
+	"net/http"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
@@ -9,8 +11,10 @@ import (
 )
 
 var _ = Describe("ATC version client", func() {
-	var server *ghttp.Server
-	var client *atc.VersionClient
+	var (
+		server *ghttp.Server
+		client *atc.VersionClient
+	)
 
 	BeforeEach(func() {
 		server = ghttp.NewServer()
@@ -21,16 +25,34 @@ var _ = Describe("ATC version client", func() {
 		server.Close()
 	})
 
-	Describe("fetching ATC version", func() {
+	Describe("fetching the server version", func() {
+		var (
+			err     error
+			version string
+		)
+
 		BeforeEach(func() {
 			server.AppendHandlers(
-				ghttp.VerifyRequest("GET", "/api/v1/info"),
-			)
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/api/v1/info"),
+					ghttp.RespondWith(http.StatusOK, `{"version":"0.8.15"}`),
+				))
 		})
 
-		It("should make a request to fetch ATC version", func() {
-			client.GetServerVersion()
+		JustBeforeEach(func() {
+			version, err = client.GetServerVersion()
+		})
+
+		It("makes a request to fetch ATC version", func() {
 			Expect(server.ReceivedRequests()).To(HaveLen(1))
+		})
+
+		It("returns no error", func() {
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("returns the expected version", func() {
+			Expect(version).To(Equal("0.8.15"))
 		})
 	})
 })

@@ -46,7 +46,7 @@ func main() {
 		target, ok := flyTargets.Targets[apronBusArgs.TargetName]
 
 		if !ok {
-			fmt.Fprintf(os.Stderr, "apron-bus: could not find target %v\n", apronBusArgs)
+			fmt.Fprintf(os.Stderr, "apron-bus: Error - could not find target %v\n", apronBusArgs)
 			os.Exit(1)
 		}
 
@@ -54,7 +54,7 @@ func main() {
 	} else if apronBusArgs.URL != "" {
 		apiURL = apronBusArgs.URL
 	} else {
-		fmt.Fprintln(os.Stderr, "apron-bus: neither target name nor URL given; please use one of the fly commands directly.")
+		fmt.Fprintln(os.Stderr, "apron-bus: Error - neither target name nor URL given; please use one of the fly commands directly.")
 		os.Exit(1)
 	}
 
@@ -66,7 +66,7 @@ func main() {
 	version, err := client.GetServerVersion()
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "apron-bus: %v\n", err)
+		fmt.Fprintf(os.Stderr, "apron-bus: Error - %v\n", err)
 		os.Exit(1)
 	}
 
@@ -78,7 +78,7 @@ func main() {
 	pathToFly, err := exec.LookPath(flyWithVersion)
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "apron-bus: could not find %v in $PATH (%v)\n", flyWithVersion, os.Getenv("PATH"))
+		fmt.Fprintf(os.Stderr, "apron-bus: Error - could not find %v in $PATH\n", flyWithVersion)
 		os.Exit(1)
 	}
 
@@ -90,7 +90,7 @@ func main() {
 	}
 
 	if err := syscall.Exec(pathToFly, args, os.Environ()); err != nil {
-		fmt.Fprintf(os.Stderr, "apron-bus: could not invoke %v: %v\n", pathToFly, err)
+		fmt.Fprintf(os.Stderr, "apron-bus: Error - could not invoke %v: %v\n", pathToFly, err)
 		os.Exit(1)
 	}
 }
